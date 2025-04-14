@@ -1,0 +1,10 @@
+{
+    "name": "cworkitemagent",
+    "version": "0.0.2",
+    "main": "workitem_client",
+    "openiap": {
+        "language": "exec",
+        "daemon": true,
+        "chromium": false
+    }
+}
