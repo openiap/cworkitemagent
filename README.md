@@ -20,8 +20,8 @@ https://github.com/openiap/cworkitemagent.git
 # getting started
 compile and run in debug mode
 
-Go to [rustapi](https://github.com/openiap/rustapi/releases) and download libraries for your platform and place them in the lib folder.
-You should also update clib_openiap.h with the latest version from [here](https://github.com/openiap/rustapi/blob/main/crates/clib/clib_openiap.h).
+make will automaticly download clib_openiap.h and binary for current platform, if you cannot use make you need to, go to [rustapi](https://github.com/openiap/rustapi/releases) and download library for your platform and place them in the lib folder, and rename it to libopeniap_clib.so
+
 
 ```bash
 
