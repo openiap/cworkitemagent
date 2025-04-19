@@ -1,3 +1,6 @@
+TARGET  := workitem_client
+SRCS    := main.c
+
 # Detect the operating system.
 UNAME_S := $(shell uname -s)
 # Detect architecture
@@ -33,44 +36,67 @@ else
 endif
 
 # OpenIAP version
-OPENIAP_VERSION := 0.0.28
+OPENIAP_VERSION := 0.0.32
 # Header file URL
-HEADER_URL := https://raw.githubusercontent.com/openiap/rustapi/ba787072946f96d29b8f5eb01abf8dc06afa8603/crates/clib/clib_openiap.h
+HEADER_URL := https://raw.githubusercontent.com/openiap/rustapi/081d8ca4fecb3fdd65312a227f7d6f6b13267aa9/crates/clib/clib_openiap.h
 
 # Set linker flags to use the appropriate lib directory with rpath.
 LDFLAGS := -L$(LIB_DIR) -Wl,-rpath,'$$ORIGIN/$(LIB_DIR)'
 
-# Choose the library name based on OS, architecture, and build type.
+# Allow static linking via make STATIC=1
+ifdef STATIC
+    LINK_TYPE := static
+else
+    LINK_TYPE := dynamic
+endif
+
+# Choose the library name and extension based on OS, architecture, and link type.
 ifeq ($(BUILD_TYPE),debug)
-    # Debug build uses the common library name across platforms.
     LIB_NAME := openiap_clib
+    LIB_EXT := .so
 else
     ifeq ($(UNAME_S),Linux)
-        LIB_NAME := openiap-linux-$(ARCH_SUFFIX)
-        LIB_URL := https://github.com/openiap/rustapi/releases/download/$(OPENIAP_VERSION)/libopeniap-linux-$(ARCH_SUFFIX).so
+        LIB_BASE := openiap-linux-$(ARCH_SUFFIX)
+        ifeq ($(LINK_TYPE),static)
+            LIB_NAME := $(LIB_BASE)
+            LIB_EXT := .a
+            LIB_URL := https://github.com/openiap/rustapi/releases/download/$(OPENIAP_VERSION)/lib$(LIB_BASE).a
+        else
+            LIB_NAME := $(LIB_BASE)
+            LIB_EXT := .so
+            LIB_URL := https://github.com/openiap/rustapi/releases/download/$(OPENIAP_VERSION)/lib$(LIB_BASE).so
+        endif
     else ifeq ($(UNAME_S),Darwin)
-        LIB_NAME := openiap-macos-$(ARCH_SUFFIX)
-        LIB_URL := https://github.com/openiap/rustapi/releases/download/$(OPENIAP_VERSION)/libopeniap-macos-$(ARCH_SUFFIX).dylib
+        LIB_BASE := openiap-macos-$(ARCH_SUFFIX)
+        ifeq ($(LINK_TYPE),static)
+            LIB_NAME := $(LIB_BASE)
+            LIB_EXT := .a
+            LIB_URL := https://github.com/openiap/rustapi/releases/download/$(OPENIAP_VERSION)/lib$(LIB_BASE).a
+        else
+            LIB_NAME := $(LIB_BASE)
+            LIB_EXT := .dylib
+            LIB_URL := https://github.com/openiap/rustapi/releases/download/$(OPENIAP_VERSION)/lib$(LIB_BASE).dylib
+        endif
     else ifeq ($(UNAME_S),Windows_NT)
-        LIB_NAME := openiap-windows-$(ARCH_SUFFIX)
-        LIB_URL := https://github.com/openiap/rustapi/releases/download/$(OPENIAP_VERSION)/openiap-windows-$(ARCH_SUFFIX).dll
+        LIB_BASE := openiap-windows-$(ARCH_SUFFIX)
+        ifeq ($(LINK_TYPE),static)
+            LIB_NAME := $(LIB_BASE)
+            LIB_EXT := .a
+            LIB_URL := https://github.com/openiap/rustapi/releases/download/$(OPENIAP_VERSION)/$(LIB_BASE).a
+        else
+            LIB_NAME := $(LIB_BASE)
+            LIB_EXT := .dll
+            LIB_URL := https://github.com/openiap/rustapi/releases/download/$(OPENIAP_VERSION)/$(LIB_BASE).dll
+        endif
     else
         $(error Unsupported OS: $(UNAME_S))
     endif
 endif
 
 # Use the actual library file path to avoid -l prefix issues
-ifeq ($(UNAME_S),Linux)
-    LIB := $(LIB_DIR)/lib$(LIB_NAME).so
-else ifeq ($(UNAME_S),Darwin)
-    LIB := $(LIB_DIR)/lib$(LIB_NAME).dylib
-else ifeq ($(UNAME_S),Windows_NT)
-    LIB := $(LIB_DIR)/$(LIB_NAME).dll
-endif
+LIB := $(LIB_DIR)/lib$(LIB_NAME)$(LIB_EXT)
 
 # Binary name and source files.
-TARGET  := workitem_client
-SRCS    := main.c
 OBJS    := $(SRCS:.c=.o)
 
 # Add symlink target
@@ -107,10 +133,11 @@ $(LIB):
 		echo "Error: Neither curl nor wget is available. Please install one of them."; \
 		exit 1; \
 	fi
-	@chmod +x $(LIB)
+	@chmod +x $(LIB) || true
 
-# Create necessary symlink for runtime library loading
+# Create necessary symlink for runtime library loading (only for dynamic)
 symlink:
+ifeq ($(LINK_TYPE),dynamic)
 ifeq ($(UNAME_S),Linux)
 	@if [ ! -L "$(LIB_DIR)/libopeniap_clib.so" ]; then \
 		echo "Creating symlink for runtime library loading"; \
@@ -122,9 +149,14 @@ else ifeq ($(UNAME_S),Darwin)
 		ln -sf lib$(LIB_NAME).dylib $(LIB_DIR)/libopeniap_clib.dylib; \
 	fi
 endif
+endif
 
 $(TARGET): $(OBJS)
+ifeq ($(LINK_TYPE),static)
+	$(CC) $(OBJS) -o $(TARGET) $(LIB) -lm
+else
 	$(CC) $(OBJS) -o $(TARGET) $(LDFLAGS) $(LIB)
+endif
 
 %.o: %.c clib_openiap.h
 	$(CC) $(CFLAGS) -c $< -o $@

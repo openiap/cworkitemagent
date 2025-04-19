@@ -39,4 +39,7 @@ export OPENIAP_JWT=eyJhbGciOiJI....
 make && ./workitem_client
 # or with gcc directly
 gcc main.c -Llib -lopeniap-linux-x64 -Wl,-rpath=lib -o workitem_client && ./workitem_client
+# to static linked, use
+make STATIC=1 && ./workitem_client
+
 ```

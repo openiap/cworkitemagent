@@ -5,7 +5,6 @@
 #include <unistd.h>
 #include <dirent.h>
 #include <sys/stat.h>
-#include <pthread.h>
 
 // Default workitem queue
 const char* DEFAULT_WIQ = "cqueue";
@@ -30,68 +29,21 @@ FileList* get_new_files(FileList *original_files);
 void cleanup_files(FileList *original_files);
 void client_event_callback(struct ClientEventWrapper *event);
 
-// Forward declaration for the background processing function
-void* process_workitems_thread(void* arg);
-
-// Structure for thread arguments
-typedef struct {
-    char* wiq;
-    FileList* original_files;
-} ThreadArgs;
-
-// Queue event callback function - returns immediately
+// Queue event callback function
 const char* queue_event_callback(struct QueueEventWrapper *event) {
     (void)event; // Explicitly mark event as used to avoid warning
     info("Queue event received");
     
-    // Create a background thread to process workitems
-    pthread_t thread_id;
-    
-    // Get the queue name
-    const char *wiq = getenv("wiq");
-    if (!wiq) wiq = DEFAULT_WIQ;
-    
-    // Create file list
     FileList *original_files = list_files();
     if (!original_files) {
         error("Failed to list files");
         return NULL;
     }
-    
-    // Prepare thread arguments (must be heap allocated)
-    ThreadArgs *args = (ThreadArgs*)malloc(sizeof(ThreadArgs));
-    if (!args) {
-        error("Failed to allocate memory for thread arguments");
-        free_file_list(original_files);
-        return NULL;
-    }
-    
-    args->wiq = strdup(wiq);
-    args->original_files = original_files;
-    
-    // Create thread to process workitems in the background
-    if (pthread_create(&thread_id, NULL, process_workitems_thread, args) != 0) {
-        error("Failed to create background thread for workitem processing");
-        free(args->wiq);
-        free_file_list(args->original_files);
-        free(args);
-        return NULL;
-    }
-    
-    // Detach thread so it cleans up automatically when done
-    pthread_detach(thread_id);
-    
-    // Return immediately
-    return NULL;
-}
 
-// Background thread function to process workitems
-void* process_workitems_thread(void* arg) {
-    ThreadArgs *thread_args = (ThreadArgs*)arg;
-    FileList *original_files = thread_args->original_files;
-    char *wiq = thread_args->wiq;
-    
     // Pop workitem from the queue
+    const char *wiq = getenv("wiq");
+    if (!wiq) wiq = DEFAULT_WIQ;
+
     struct PopWorkitemRequestWrapper pop_req = {
         .wiq = wiq,
         .wiqid = NULL,
@@ -130,13 +82,8 @@ void* process_workitems_thread(void* arg) {
         info(log_message);
     }
 
-    // Final cleanup
     cleanup_files(original_files);
     free_file_list(original_files);
-    
-    // Free thread arguments
-    free(wiq);
-    free(thread_args);
     
     return NULL;
 }
