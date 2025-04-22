@@ -36,9 +36,9 @@ else
 endif
 
 # OpenIAP version
-OPENIAP_VERSION := 0.0.32
+OPENIAP_VERSION := 0.0.33
 # Header file URL
-HEADER_URL := https://raw.githubusercontent.com/openiap/rustapi/081d8ca4fecb3fdd65312a227f7d6f6b13267aa9/crates/clib/clib_openiap.h
+HEADER_URL := https://raw.githubusercontent.com/openiap/rustapi/b1493cbab44bf78857478f0f963b6624393a0d28/crates/clib/clib_openiap.h
 
 # Set linker flags to use the appropriate lib directory with rpath.
 LDFLAGS := -L$(LIB_DIR) -Wl,-rpath,'$$ORIGIN/$(LIB_DIR)'
