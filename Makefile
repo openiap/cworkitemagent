@@ -36,7 +36,7 @@ else
 endif
 
 # OpenIAP version
-OPENIAP_VERSION := 0.0.33
+OPENIAP_VERSION := 0.0.34
 # Header file URL
 HEADER_URL := https://raw.githubusercontent.com/openiap/rustapi/b1493cbab44bf78857478f0f963b6624393a0d28/crates/clib/clib_openiap.h
 
