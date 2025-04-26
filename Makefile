@@ -1,172 +1,91 @@
-TARGET  := workitem_client
-SRCS    := main.c
+TARGET          := workitem_client
+SRCS            := main.c
+OBJS            := $(SRCS:.c=.o)
 
-# Detect the operating system.
-UNAME_S := $(shell uname -s)
-# Detect architecture
-ARCH := $(shell uname -m)
+# Detect OS & architecture
+UNAME_S         := $(shell uname -s)
+ARCH            := $(shell uname -m)
 ifeq ($(ARCH),x86_64)
-    ARCH_SUFFIX := x64
+	ARCH_SUFFIX := x64
 else ifeq ($(ARCH),amd64)
-    ARCH_SUFFIX := x64
+	ARCH_SUFFIX := x64
 else ifeq ($(ARCH),arm64)
-    ARCH_SUFFIX := arm64
+	ARCH_SUFFIX := arm64
 else ifeq ($(ARCH),aarch64)
-    ARCH_SUFFIX := arm64
+	ARCH_SUFFIX := arm64
 else ifeq ($(ARCH),i686)
-    ARCH_SUFFIX := i686
+	ARCH_SUFFIX := i686
 else ifeq ($(ARCH),i386)
-    ARCH_SUFFIX := i686
+	ARCH_SUFFIX := i686
 else
-    $(error Unsupported architecture: $(ARCH))
+	$(error Unsupported architecture: $(ARCH))
 endif
 
-# Set the C compiler.
-CC := gcc
+# Compiler settings
+CC              := gcc
+CFLAGS          := -I. -Wall -Wextra -O2
 
-# Determine build type.
-ifdef DEBUG
-    BUILD_TYPE := debug
-    LIB_DIR := ../target/debug
-    CFLAGS := -I. -Wall -Wextra -g -O0
-else
-    BUILD_TYPE := release
-    LIB_DIR := lib
-    CFLAGS := -I. -Wall -Wextra -O2
-endif
-
-# OpenIAP version
+# OpenIAP version and header URL
 OPENIAP_VERSION := 0.0.34
-# Header file URL
-HEADER_URL := https://raw.githubusercontent.com/openiap/rustapi/8e0a37ff19ed2d61f8130b6b85bc53d613f84f20/crates/clib/clib_openiap.h
+HEADER_URL      := https://raw.githubusercontent.com/openiap/rustapi/8e0a37ff19ed2d61f8130b6b85bc53d613f84f20/crates/clib/clib_openiap.h
 
-# Set linker flags to use the appropriate lib directory with rpath.
-LDFLAGS := -L$(LIB_DIR) -Wl,-rpath,'$$ORIGIN/$(LIB_DIR)'
+# Library output directory
+LIB_DIR         := lib
 
-# Allow static linking via make STATIC=1
-ifdef STATIC
-    LINK_TYPE := static
-else
-    LINK_TYPE := dynamic
-endif
+# Dynamic linking flags
+LDFLAGS         := -L$(LIB_DIR) -Wl,-rpath,'$$ORIGIN/$(LIB_DIR)'
 
-# Choose the library name and extension based on OS, architecture, and link type.
-ifeq ($(BUILD_TYPE),debug)
-    LIB_NAME := openiap_clib
-    LIB_EXT := .so
-else
-    ifeq ($(UNAME_S),Linux)
-        LIB_BASE := openiap-linux-$(ARCH_SUFFIX)
-        ifeq ($(LINK_TYPE),static)
-            LIB_NAME := $(LIB_BASE)
-            LIB_EXT := .a
-            LIB_URL := https://github.com/openiap/rustapi/releases/download/$(OPENIAP_VERSION)/lib$(LIB_BASE).a
-        else
-            LIB_NAME := $(LIB_BASE)
-            LIB_EXT := .so
-            LIB_URL := https://github.com/openiap/rustapi/releases/download/$(OPENIAP_VERSION)/lib$(LIB_BASE).so
-        endif
-    else ifeq ($(UNAME_S),Darwin)
-        LIB_BASE := openiap-macos-$(ARCH_SUFFIX)
-        ifeq ($(LINK_TYPE),static)
-            LIB_NAME := $(LIB_BASE)
-            LIB_EXT := .a
-            LIB_URL := https://github.com/openiap/rustapi/releases/download/$(OPENIAP_VERSION)/lib$(LIB_BASE).a
-        else
-            LIB_NAME := $(LIB_BASE)
-            LIB_EXT := .dylib
-            LIB_URL := https://github.com/openiap/rustapi/releases/download/$(OPENIAP_VERSION)/lib$(LIB_BASE).dylib
-        endif
-    else ifeq ($(UNAME_S),Windows_NT)
-        LIB_BASE := openiap-windows-$(ARCH_SUFFIX)
-        ifeq ($(LINK_TYPE),static)
-            LIB_NAME := $(LIB_BASE)
-            LIB_EXT := .a
-            LIB_URL := https://github.com/openiap/rustapi/releases/download/$(OPENIAP_VERSION)/$(LIB_BASE).a
-        else
-            LIB_NAME := $(LIB_BASE)
-            LIB_EXT := .dll
-            LIB_URL := https://github.com/openiap/rustapi/releases/download/$(OPENIAP_VERSION)/$(LIB_BASE).dll
-        endif
-    else
-        $(error Unsupported OS: $(UNAME_S))
-    endif
-endif
+# Library names
+LIB_BASE        := openiap-linux-$(ARCH_SUFFIX)
+LIB_SO          := $(LIB_DIR)/lib$(LIB_BASE).so
+LIB_GENERIC_SO  := $(LIB_DIR)/libopeniap_clib.so
 
-# Use the actual library file path to avoid -l prefix issues
-LIB := $(LIB_DIR)/lib$(LIB_NAME)$(LIB_EXT)
+# Phony targets
+.PHONY: all clean download_deps prepare_lib dockerbuild run
 
-# Binary name and source files.
-OBJS    := $(SRCS:.c=.o)
+# Default build: dynamic
+all: download_deps prepare_lib $(TARGET)
+	@echo "Built $(TARGET) (dynamic)"
 
-# Add symlink target
-.PHONY: all clean run debug symlink download_deps
-
-all: download_deps symlink $(TARGET)
-	@echo "Built $(TARGET) in $(BUILD_TYPE) mode."
-
-# Download dependencies (header and library files)
-download_deps: clib_openiap.h $(LIB_DIR) $(LIB)
+# Download header + dynamic library
+download_deps: clib_openiap.h $(LIB_SO)
 
 clib_openiap.h:
-	@echo "Downloading header file..."
-	@if command -v curl >/dev/null 2>&1; then \
-		curl -s -L -o clib_openiap.h $(HEADER_URL); \
-	elif command -v wget >/dev/null 2>&1; then \
-		wget -q -O clib_openiap.h $(HEADER_URL); \
-	else \
-		echo "Error: Neither curl nor wget is available. Please install one of them."; \
-		exit 1; \
-	fi
+	@echo "Downloading C header..."
+	@curl -sSL -o $@ $(HEADER_URL)
 
 $(LIB_DIR):
-	@echo "Creating library directory..."
 	@mkdir -p $(LIB_DIR)
 
-$(LIB):
-	@echo "Downloading library file..."
-	@if command -v curl >/dev/null 2>&1; then \
-		curl -s -L -o $(LIB) $(LIB_URL); \
-	elif command -v wget >/dev/null 2>&1; then \
-		wget -q -O $(LIB) $(LIB_URL); \
-	else \
-		echo "Error: Neither curl nor wget is available. Please install one of them."; \
-		exit 1; \
-	fi
-	@chmod +x $(LIB) || true
+$(LIB_SO): | $(LIB_DIR)
+	@echo "Downloading OpenIAP shared library..."
+	@curl -sSL -o $@ \
+	  https://github.com/openiap/rustapi/releases/download/$(OPENIAP_VERSION)/lib$(LIB_BASE).so
+	@chmod +x $@ || true
 
-# Create necessary symlink for runtime library loading (only for dynamic)
-symlink:
-ifeq ($(LINK_TYPE),dynamic)
-ifeq ($(UNAME_S),Linux)
-	@if [ ! -L "$(LIB_DIR)/libopeniap_clib.so" ]; then \
-		echo "Creating symlink for runtime library loading"; \
-		ln -sf lib$(LIB_NAME).so $(LIB_DIR)/libopeniap_clib.so; \
-	fi
-else ifeq ($(UNAME_S),Darwin)
-	@if [ ! -L "$(LIB_DIR)/libopeniap_clib.dylib" ]; then \
-		echo "Creating symlink for runtime library loading"; \
-		ln -sf lib$(LIB_NAME).dylib $(LIB_DIR)/libopeniap_clib.dylib; \
-	fi
-endif
-endif
+# Copy to generic name so linker and loader see libopeniap_clib.so
+prepare_lib: $(LIB_SO)
+	@echo "Copying to generic name for loader..."
+	@cp $(LIB_SO) $(LIB_GENERIC_SO)
 
+# Compile & link dynamically
 $(TARGET): $(OBJS)
-ifeq ($(LINK_TYPE),static)
-	$(CC) $(OBJS) -o $(TARGET) $(LIB) -lm
-else
-	$(CC) $(OBJS) -o $(TARGET) $(LDFLAGS) $(LIB)
-endif
+	$(CC) $(OBJS) -o $(TARGET) $(LDFLAGS) -lopeniap_clib
 
 %.o: %.c clib_openiap.h
 	$(CC) $(CFLAGS) -c $< -o $@
 
+# Patch the interpreter on a NixOS-built binary
+dockerbuild: all
+	@command -v patchelf >/dev/null 2>&1 || { \
+	  echo "Error: patchelf is required for dockerbuild. Install it locally."; \
+	  exit 1; }
+	@patchelf --set-interpreter /lib64/ld-linux-x86-64.so.2 $(TARGET)
+	@echo "✓ $(TARGET) patched for native loader"
+
 clean:
-	rm -f $(TARGET) $(OBJS)
-	rm -f $(LIB_DIR)/libopeniap_clib.so $(LIB_DIR)/libopeniap_clib.dylib
+	@rm -f $(TARGET) $(OBJS) clib_openiap.h
+	@rm -rf $(LIB_DIR)
 
 run: $(TARGET)
-	./$(TARGET)
-
-debug:
-	$(MAKE) DEBUG=1 all
+	@./$(TARGET)

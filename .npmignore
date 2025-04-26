@@ -1,0 +1,8 @@
+*.tgz
+*.csv
+*.o
+.env
+clib_openiap.h
+deps
+.github
+.vscode
