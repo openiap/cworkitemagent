@@ -1,6 +1,7 @@
 TARGET          := workitem_client
 SRCS            := main.c
 OPENIAP_VERSION := 0.0.36
+INCLUDE_DIR     := include
 OBJS            := $(SRCS:.c=.o)
 
 # Detect OS & architecture
@@ -66,10 +67,13 @@ LIB_GENERIC_SO  := $(LIB_DIR)/libopeniap_clib.$(LIB_EXT)
 all: download_deps prepare_lib $(TARGET)
 	@echo "Built $(TARGET) (dynamic)"
 
-# Download header + dynamic library
-download_deps: clib_openiap.h $(LIB_SO)
+# Ensure the include directory exists
+$(INCLUDE_DIR):
+	@mkdir -p $(INCLUDE_DIR)
 
-clib_openiap.h:
+download_deps: $(INCLUDE_DIR)/clib_openiap.h $(LIB_SO)
+
+$(INCLUDE_DIR)/clib_openiap.h: | $(INCLUDE_DIR)
 	@echo "Downloading C header..."
 	@curl -sSL -o $@ $(HEADER_URL)
 
@@ -94,15 +98,17 @@ $(TARGET): $(OBJS) prepare_lib
 	$(CC) $(OBJS) -o $(TARGET) $(LDFLAGS) -lopeniap_clib
 ifeq ($(OS_SUFFIX),macos)
 	@if [ -f $(TARGET) ]; then \
+		echo "Patching $(TARGET) for macOS..."; \
 		install_name_tool -add_rpath @executable_path/lib $(TARGET); \
 	fi
 else ifeq ($(OS_SUFFIX),linux)
 	@if [ -f $(TARGET) ]; then \
+		echo "Patching $(TARGET) for Linux..."; \
 		patchelf --set-rpath '$$ORIGIN/lib' $(TARGET); \
 	fi
 endif
 
-%.o: %.c clib_openiap.h
+%.o: %.c $(INCLUDE_DIR)/clib_openiap.h
 	$(CC) $(CFLAGS) -c $< -o $@
 
 # Patch the interpreter on a NixOS-built binary
@@ -114,8 +120,17 @@ dockerbuild: all
 	@echo "✓ $(TARGET) patched for native loader"
 
 clean:
-	@rm -f $(TARGET) $(OBJS) clib_openiap.h
-	@rm -rf $(LIB_DIR)
+	@rm -rf $(TARGET) $(OBJS) $(INCLUDE_DIR) $(LIB_DIR)
 
 run: $(TARGET)
 	@./$(TARGET)
+
+# Debug build
+debug: clean $(OBJS) $(INCLUDE_DIR) $(LIB_DIR)
+	@echo "Copying debug library to lib directory..."
+	@mkdir -p $(LIB_DIR) ${INCLUDE_DIR}
+	@cp ../target/debug/libopeniap_clib.so $(LIB_DIR)/libopeniap-linux-$(ARCH_SUFFIX).so
+	@cp ../target/debug/libopeniap_clib.so $(LIB_DIR)/libopeniap_clib.so
+	@cp ../crates/clib/clib_openiap.h $(INCLUDE_DIR)/clib_openiap.h
+	$(CC) $(OBJS) -o $(TARGET) $(LDFLAGS) -l:libopeniap-linux-$(ARCH_SUFFIX).so
+	@echo "Built $(TARGET) (debug)"

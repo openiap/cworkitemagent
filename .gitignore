@@ -5,3 +5,4 @@ workitem_client
 .env
 lib
 clib_openiap.h
+/include
