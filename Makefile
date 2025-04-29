@@ -1,6 +1,6 @@
 TARGET          := workitem_client
 SRCS            := main.c
-OPENIAP_VERSION := 0.0.35
+OPENIAP_VERSION := 0.0.36
 OBJS            := $(SRCS:.c=.o)
 
 # Detect OS & architecture
