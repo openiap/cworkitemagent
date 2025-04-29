@@ -5,20 +5,31 @@ OBJS            := $(SRCS:.c=.o)
 # Detect OS & architecture
 UNAME_S         := $(shell uname -s)
 ARCH            := $(shell uname -m)
-ifeq ($(ARCH),x86_64)
-	ARCH_SUFFIX := x64
-else ifeq ($(ARCH),amd64)
-	ARCH_SUFFIX := x64
-else ifeq ($(ARCH),arm64)
-	ARCH_SUFFIX := arm64
-else ifeq ($(ARCH),aarch64)
-	ARCH_SUFFIX := arm64
-else ifeq ($(ARCH),i686)
-	ARCH_SUFFIX := i686
-else ifeq ($(ARCH),i386)
-	ARCH_SUFFIX := i686
+
+ifeq ($(UNAME_S),Darwin)
+    OS_SUFFIX   := macos
+else ifeq ($(UNAME_S),Linux)
+    OS_SUFFIX   := linux
+else ifeq ($(UNAME_S),Windows_NT)
+    OS_SUFFIX   := windows
 else
-	$(error Unsupported architecture: $(ARCH))
+    $(error Unsupported OS: $(UNAME_S))
+endif
+
+ifeq ($(ARCH),x86_64)
+    ARCH_SUFFIX := x64
+else ifeq ($(ARCH),amd64)
+    ARCH_SUFFIX := x64
+else ifeq ($(ARCH),arm64)
+    ARCH_SUFFIX := arm64
+else ifeq ($(ARCH),aarch64)
+    ARCH_SUFFIX := arm64
+else ifeq ($(ARCH),i686)
+    ARCH_SUFFIX := i686
+else ifeq ($(ARCH),i386)
+    ARCH_SUFFIX := i686
+else
+    $(error Unsupported architecture: $(ARCH))
 endif
 
 # Compiler settings
@@ -36,9 +47,17 @@ LIB_DIR         := lib
 LDFLAGS         := -L$(LIB_DIR) -Wl,-rpath,'$$ORIGIN/$(LIB_DIR)'
 
 # Library names
-LIB_BASE        := openiap-linux-$(ARCH_SUFFIX)
-LIB_SO          := $(LIB_DIR)/lib$(LIB_BASE).so
-LIB_GENERIC_SO  := $(LIB_DIR)/libopeniap_clib.so
+ifeq ($(OS_SUFFIX),macos)
+    LIB_EXT := dylib
+else ifeq ($(OS_SUFFIX),windows)
+    LIB_EXT := dll
+else
+    LIB_EXT := so
+endif
+
+LIB_BASE        := openiap-$(OS_SUFFIX)-$(ARCH_SUFFIX)
+LIB_SO          := $(LIB_DIR)/lib$(LIB_BASE).$(LIB_EXT)
+LIB_GENERIC_SO  := $(LIB_DIR)/libopeniap_clib.$(LIB_EXT)
 
 # Phony targets
 .PHONY: all clean download_deps prepare_lib dockerbuild run
@@ -60,17 +79,28 @@ $(LIB_DIR):
 $(LIB_SO): | $(LIB_DIR)
 	@echo "Downloading OpenIAP shared library..."
 	@curl -sSL -o $@ \
-	  https://github.com/openiap/rustapi/releases/download/$(OPENIAP_VERSION)/lib$(LIB_BASE).so
+	  https://github.com/openiap/rustapi/releases/download/$(OPENIAP_VERSION)/lib$(LIB_BASE).$(LIB_EXT)
 	@chmod +x $@ || true
 
-# Copy to generic name so linker and loader see libopeniap_clib.so
+# Copy to generic name so linker and loader see libopeniap_clib.dylib
 prepare_lib: $(LIB_SO)
 	@echo "Copying to generic name for loader..."
 	@cp $(LIB_SO) $(LIB_GENERIC_SO)
+ifeq ($(OS_SUFFIX),macos)
+	@install_name_tool -id @rpath/libopeniap_clib.dylib $(LIB_GENERIC_SO)
+endif
 
-# Compile & link dynamically
-$(TARGET): $(OBJS)
+$(TARGET): $(OBJS) prepare_lib
 	$(CC) $(OBJS) -o $(TARGET) $(LDFLAGS) -lopeniap_clib
+ifeq ($(OS_SUFFIX),macos)
+	@if [ -f $(TARGET) ]; then \
+		install_name_tool -add_rpath @executable_path/lib $(TARGET); \
+	fi
+else ifeq ($(OS_SUFFIX),linux)
+	@if [ -f $(TARGET) ]; then \
+		patchelf --set-rpath '$$ORIGIN/lib' $(TARGET); \
+	fi
+endif
 
 %.o: %.c clib_openiap.h
 	$(CC) $(CFLAGS) -c $< -o $@
