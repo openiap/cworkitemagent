@@ -1,5 +1,6 @@
 TARGET          := workitem_client
 SRCS            := main.c
+OPENIAP_VERSION := 0.0.35
 OBJS            := $(SRCS:.c=.o)
 
 # Detect OS & architecture
@@ -37,8 +38,7 @@ CC              := gcc
 CFLAGS          := -I. -Wall -Wextra -O2
 
 # OpenIAP version and header URL
-OPENIAP_VERSION := 0.0.34
-HEADER_URL      := https://raw.githubusercontent.com/openiap/rustapi/8e0a37ff19ed2d61f8130b6b85bc53d613f84f20/crates/clib/clib_openiap.h
+HEADER_URL      := https://raw.githubusercontent.com/openiap/rustapi/refs/tags/$(OPENIAP_VERSION)/crates/clib/clib_openiap.h
 
 # Library output directory
 LIB_DIR         := lib
