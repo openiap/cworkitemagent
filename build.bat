@@ -1,7 +1,7 @@
 @echo off
 echo Building OpenIAP client CLI for Windows
 
-set OPENIAP_VERSION=0.0.36
+set OPENIAP_VERSION=0.0.38
 set ARCH=x64
 
 REM Create lib directory if it doesn't exist

@@ -1,6 +1,6 @@
 TARGET          := workitem_client
 SRCS            := main.c
-OPENIAP_VERSION := 0.0.36
+OPENIAP_VERSION := 0.0.38
 INCLUDE_DIR     := include
 OBJS            := $(SRCS:.c=.o)
 
